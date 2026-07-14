@@ -1,0 +1,17 @@
+# Dependencies and local package cache
+node_modules/
+.npm-cache/
+
+# Generated extension builds and release archives
+dist/
+release/
+
+# Local tooling and operating-system files
+.DS_Store
+*.log
+.vite/
+
+# Environment files
+.env
+.env.*
+!.env.example
