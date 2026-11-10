@@ -1,13 +1,13 @@
-# Chrome Web Store submission — Focus Five
+# Chrome Web Store submission: Focus Five
 
 Everything the Developer Dashboard asks for, in the order it asks. Upload `release/five-extension-v1.7.0.zip` as the package.
 
 ## Store listing tab
 
-**Name** (comes from the manifest): Focus Five — a calmer focus list
+**Name** (comes from the manifest): Focus Five - a to-do list that stops at five
 
-**Summary** (from the manifest, 104 of 132 characters):
-Keep five priorities in view, move the rest aside, and block distractions until the work is done.
+**Summary** (from the manifest, 103 of 132 characters):
+Replaces your new tab with today’s five tasks and a focus timer. Anything else waits in Later or Ideas.
 
 **Category:** Productivity → Workflow & Planning
 
@@ -16,31 +16,21 @@ Keep five priorities in view, move the rest aside, and block distractions until 
 **Description:**
 
 ```
-Focus Five turns every new tab into a short, honest list: the five things that matter today, and nothing else.
+I made Focus Five because my to-do list kept growing past the point where I'd actually look at it. So this one caps Today at five. Try to add a sixth and it asks which task should move out.
 
-Today, five at a time
-• Up to five priorities. When Today is full, adding another asks which one it replaces.
-• One task is Now. Start a 25- or 50-minute focus block from it with a single keypress.
-• Reorder by dragging or from the keyboard, edit titles in place, and add a one-line hint to decode a terse title.
+The top task is the one you're on. Press Enter and a full-screen timer starts on it, 25 or 50 minutes, with the next task shown at the bottom. Finished tasks get crossed off and keep their slot until you clear them, and the sidebar keeps a timeline of what you got done today.
 
-Everything else has a place
-• Later holds what isn’t for today. Ideas is an inbox you triage one at a time: Today, Later, Drop or Skip.
-• Daily, weekday and weekly routines show up when they’re due without taking a priority slot.
-• The Daybook keeps a timeline of what you finished today, plus a one-line note that clears at midnight.
+Anything that isn't for today goes to Later. Half-formed thoughts go to Ideas, and when you have a minute you sort them one at a time into Today or Later, or drop them.
 
-Focus mode and blocking
-• A full-screen focus timer with your task, a progress bar and what’s up next.
-• Sites on your blocklist send you back to your list while Today still has open work. Chrome asks for access one site at a time — Focus Five never asks to read every website.
-• Three 30-minute pauses a day, for when you genuinely need one.
+Other things it does:
+• Blocks the sites you pick (Reddit, YouTube, whatever gets you) while Today still has open tasks. Chrome asks permission for each site when you add it. You get three 30-minute breaks from blocking per day.
+• Routines that come back daily, on weekdays or once a week, without using up one of the five slots.
+• A short hint under any task, for titles that only make sense to you at 9am.
+• Drag to reorder, or do nearly everything from the keyboard: N for a new task, arrows to pick, Enter to start, E to edit.
+• Nine themes, including a couple of brutalist ones.
+• A presentation mode that swaps your list for a photo and a clock when you share your screen.
 
-Made to look at all day
-• Nine themes: System, Light, Dark, Paper, Dot grid, Blueprint, Dusk, and two brutalist ones, Brutal and Acid.
-• Presentation mode hides your list behind a wallpaper and a clock when you share your screen.
-• Keyboard first: N new, ↑↓ pick, Enter start, E edit, L / I send to Later or Ideas, G then T / L / I to switch lists.
-
-Private by design
-• No account, no servers, no analytics. Your data stays in your browser.
-• Export a backup file any time and restore it on another computer.
+Your tasks are stored in your browser and nowhere else. There's no account, and nothing is sent to a server. You can export a backup file from Settings and restore it on another computer.
 ```
 
 **Graphic assets** (all in this folder):
@@ -62,7 +52,7 @@ Private by design
 **Single purpose:**
 
 ```
-Focus Five replaces the new tab page with a short focus list — up to five priorities for today — with a focus timer and an optional blocklist that keeps the distracting sites the user chooses out of reach until the day's work is done.
+Focus Five replaces the new tab page with a to-do list limited to five tasks for today. It includes a focus timer, and it can optionally block sites the user picks while those tasks are still open.
 ```
 
 **Permission justifications:**
@@ -72,11 +62,11 @@ Focus Five replaces the new tab page with a short focus list — up to five prio
 | `storage` | Saves the user's tasks, ideas, routines, settings and blocklist locally in chrome.storage.local. Nothing is sent anywhere. |
 | `alarms` | Keeps recurring tasks, the focus timer and the 30-minute blocklist pause on schedule while no new tab is open. |
 | `declarativeNetRequestWithHostAccess` | Redirects websites the user adds to their blocklist to the Focus Five page while they still have open tasks today. Rules are built only from the user's own blocklist. |
-| Host permissions (optional, `*://*/*`) | Requested at runtime, one website at a time, only when the user adds that website to the blocklist; Chrome shows a prompt for each one. Needed so the blocking rule can redirect that site. No host access is granted at install, and page contents are never read. |
+| Host permissions (optional, `*://*/*`) | Requested at runtime for one website at a time, when the user adds that website to the blocklist. Chrome shows a prompt each time. The blocking rule needs it to redirect that site. Nothing is granted at install, and the extension never reads page contents. |
 
-**Remote code:** No, I am not using remote code. (All JavaScript, fonts and images are bundled in the package.)
+**Remote code:** No, I am not using remote code. All JavaScript, fonts and images are bundled in the package.
 
-**Data usage:** tick none of the data types — Focus Five collects no user data. Tick all three certifications (no selling or transferring data, no unrelated use, no creditworthiness use).
+**Data usage:** tick none of the data types, because Focus Five collects no user data. Tick all three certifications (no selling or transferring data, no unrelated use, no creditworthiness use).
 
 **Privacy policy URL:** https://github.com/lqtm/focusfive/blob/main/PRIVACY.md
 
