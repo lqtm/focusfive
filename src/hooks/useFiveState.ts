@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { releaseSiteAccess, requestSiteAccess } from '../data/siteAccess';
 import { loadState, normalizeStoredState, updateState, watchState, type StateUpdater } from '../data/storage';
 import {
   BLOCKING_PAUSE_LIMIT,
@@ -10,6 +11,8 @@ import {
 import { localDateKey } from '../domain/date';
 import { completePomodoroPhase, normalizePomodoroDay } from '../domain/pomodoro';
 import { getActiveRecurringInstances, reconcileRecurringInstances } from '../domain/recurrence';
+import { CATEGORY_COLORS, normalizeHint, parseTaskInput } from '../domain/tags';
+import { getTodaySlots, occupiesTodaySlot } from '../domain/today';
 import {
   CATEGORY_LIMIT,
   RECURRING_LIMIT,
@@ -17,23 +20,43 @@ import {
   type AppNotice,
   type AppState,
   type BreakMinutes,
+  type Category,
   type FocusMinutes,
   type PomodoroMode,
   type PrivacyWallpaperId,
   type RecurrenceCadence,
   type TaskBucket,
+  type ThemeMode,
 } from '../domain/models';
 
 function insertionOrder(state: AppState, bucket: TaskBucket): number {
-  const orders = state.tasks
-    .filter((task) => task.bucket === bucket && !task.completedAt)
-    .map((task) => task.order ?? 0);
+  const peers = bucket === 'today'
+    ? getTodaySlots(state)
+    : state.tasks.filter((task) => task.bucket === bucket && !task.completedAt);
+  const orders = peers.map((task) => task.order ?? 0);
   if (!orders.length) return 0;
   return bucket === 'today' ? Math.max(...orders) + 1 : Math.min(...orders) - 1;
 }
 
-function activeTodayTaskCount(state: AppState): number {
-  return state.tasks.filter((task) => task.bucket === 'today' && !task.completedAt).length;
+function todayIsFull(state: AppState): boolean {
+  return getTodaySlots(state).length >= TODAY_LIMIT;
+}
+
+/** Match `tag` to an existing category or create it; null when the category limit leaves no room. */
+function resolveCategory(categories: Category[], tag: string): { categories: Category[]; categoryId: string } | null {
+  const existing = categories.find((category) => category.name.toLowerCase() === tag.toLowerCase());
+  if (existing) return { categories, categoryId: existing.id };
+  if (categories.length >= CATEGORY_LIMIT) return null;
+  const created: Category = {
+    id: crypto.randomUUID(),
+    name: tag,
+    color: CATEGORY_COLORS[categories.length % CATEGORY_COLORS.length],
+  };
+  return { categories: [...categories, created], categoryId: created.id };
+}
+
+function plural(count: number, word: string): string {
+  return `${count} ${word}${count === 1 ? '' : 's'}`;
 }
 
 export function useFiveState(currentDate: Date) {
@@ -104,24 +127,37 @@ export function useFiveState(currentDate: Date) {
     });
   }, [commit, currentDate]);
 
-  const activeTodayCount = useMemo(
-    () => state ? activeTodayTaskCount(state) : 0,
-    [state],
-  );
-
-  const addTask = useCallback((title: string, requestedBucket: TaskBucket, categoryId?: string) => {
-    const cleanTitle = title.trim();
-    if (!cleanTitle) return;
+  const addTask = useCallback((rawTitle: string, requestedBucket: TaskBucket) => {
+    if (!rawTitle.trim()) return;
 
     commit((current) => {
-      const todayCount = activeTodayTaskCount(current);
-      const bucket = requestedBucket === 'today' && todayCount >= TODAY_LIMIT ? 'later' : requestedBucket;
+      const parsed = parseTaskInput(rawTitle);
+      let title = parsed.title;
+      let hint = parsed.hint;
+      let categories = current.categories;
+      let categoryId: string | undefined;
+
+      if (parsed.tag) {
+        const resolved = resolveCategory(categories, parsed.tag);
+        if (resolved) {
+          ({ categories, categoryId } = resolved);
+        } else {
+          title = parsed.titleWithTag;
+          hint = parsed.hintWithTag;
+          announce(`Five categories is the limit, so #${parsed.tag} stayed in the text.`);
+        }
+      }
+      if (!title) return current;
+
+      const bucket = requestedBucket === 'today' && todayIsFull(current) ? 'later' : requestedBucket;
       if (bucket !== requestedBucket) announce('Today already has five — sent to Later.');
       return {
         ...current,
+        categories,
         tasks: [{
           id: crypto.randomUUID(),
-          title: cleanTitle,
+          title,
+          ...(hint ? { hint } : {}),
           bucket,
           categoryId,
           createdAt: Date.now(),
@@ -131,10 +167,48 @@ export function useFiveState(currentDate: Date) {
     });
   }, [announce, commit]);
 
+  /** Rename a task and set its hint. The title accepts the composer syntax: `#tag` recategorizes, `// hint` replaces the hint. */
+  const editTask = useCallback((taskId: string, rawTitle: string, rawHint: string) => {
+    commit((current) => {
+      const task = current.tasks.find((item) => item.id === taskId);
+      if (!task) return current;
+
+      const parsed = parseTaskInput(rawTitle);
+      const typedHint = parsed.hintWithTag !== undefined;
+      let title = parsed.title;
+      let hint = typedHint ? parsed.hint : normalizeHint(rawHint);
+      let categories = current.categories;
+      let categoryId = task.categoryId;
+
+      if (parsed.tag) {
+        const resolved = resolveCategory(categories, parsed.tag);
+        if (resolved) {
+          ({ categories, categoryId } = resolved);
+        } else {
+          title = parsed.titleWithTag;
+          if (typedHint) hint = parsed.hintWithTag;
+          announce(`Five categories is the limit, so #${parsed.tag} stayed in the text.`);
+        }
+      }
+      if (!title) title = task.title;
+      if (title === task.title && hint === task.hint && categoryId === task.categoryId) return current;
+
+      return {
+        ...current,
+        categories,
+        tasks: current.tasks.map((item) => {
+          if (item.id !== taskId) return item;
+          const { hint: _previous, ...rest } = item;
+          return { ...rest, title, categoryId, ...(hint ? { hint } : {}) };
+        }),
+      };
+    });
+  }, [announce, commit]);
+
   const completeTask = useCallback((taskId: string) => {
     commit((current) => ({
       ...current,
-      tasks: current.tasks.map((task) => task.id === taskId ? { ...task, completedAt: Date.now() } : task),
+      tasks: current.tasks.map((task) => task.id === taskId ? { ...task, completedAt: Date.now(), clearedAt: undefined } : task),
     }));
   }, [commit]);
 
@@ -142,13 +216,18 @@ export function useFiveState(currentDate: Date) {
     commit((current) => {
       const task = current.tasks.find((item) => item.id === taskId);
       if (!task) return current;
-      const todayCount = activeTodayTaskCount(current);
-      const bucket = task.bucket === 'today' && todayCount >= TODAY_LIMIT ? 'later' : task.bucket;
+      if (occupiesTodaySlot(task, localDateKey())) {
+        return {
+          ...current,
+          tasks: current.tasks.map((item) => item.id === taskId ? { ...item, completedAt: undefined } : item),
+        };
+      }
+      const bucket = task.bucket === 'today' && todayIsFull(current) ? 'later' : task.bucket;
       if (bucket !== task.bucket) announce('Today is full — restored to Later instead.');
       return {
         ...current,
         tasks: current.tasks.map((item) => item.id === taskId
-          ? { ...item, bucket, order: insertionOrder(current, bucket), completedAt: undefined }
+          ? { ...item, bucket, order: insertionOrder(current, bucket), completedAt: undefined, clearedAt: undefined }
           : item),
       };
     });
@@ -160,9 +239,8 @@ export function useFiveState(currentDate: Date) {
 
   const moveTask = useCallback((taskId: string, bucket: TaskBucket) => {
     commit((current) => {
-      const todayCount = activeTodayTaskCount(current);
-      if (bucket === 'today' && todayCount >= TODAY_LIMIT) {
-        announce('Complete or move a Today task first.');
+      if (bucket === 'today' && todayIsFull(current)) {
+        announce('Today is full. Pick a slot to swap out first.');
         return current;
       }
       return {
@@ -174,28 +252,83 @@ export function useFiveState(currentDate: Date) {
     });
   }, [announce, commit]);
 
-  const reorderTask = useCallback((taskId: string, direction: 'up' | 'down') => {
+  /** Free a Today slot: open tasks go to Later, done tasks are cleared. */
+  const freeTodaySlot = useCallback((taskId: string) => {
     commit((current) => {
       const task = current.tasks.find((item) => item.id === taskId);
-      if (!task || task.bucket === 'ideas' || task.completedAt) return current;
-      const ordered = current.tasks
-        .filter((item) => item.bucket === task.bucket && !item.completedAt)
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-      const index = ordered.findIndex((item) => item.id === taskId);
-      const targetIndex = direction === 'up' ? index - 1 : index + 1;
-      if (index < 0 || targetIndex < 0 || targetIndex >= ordered.length) return current;
-      const target = ordered[targetIndex];
-      const taskOrder = task.order ?? index;
-      const targetOrder = target.order ?? targetIndex;
+      if (!task || !occupiesTodaySlot(task, localDateKey())) return current;
+      const laterOrder = insertionOrder(current, 'later');
       return {
         ...current,
         tasks: current.tasks.map((item) => {
-          if (item.id === task.id) return { ...item, order: targetOrder };
-          if (item.id === target.id) return { ...item, order: taskOrder };
-          return item;
+          if (item.id !== taskId) return item;
+          return item.completedAt ? { ...item, clearedAt: Date.now() } : { ...item, bucket: 'later', order: laterOrder };
         }),
       };
     });
+  }, [commit]);
+
+  /** Bring a Later task or Idea into Today by taking the chosen slot's position. */
+  const swapIntoToday = useCallback((incomingId: string, outgoingId: string) => {
+    commit((current) => {
+      const incoming = current.tasks.find((task) => task.id === incomingId);
+      const outgoing = current.tasks.find((task) => task.id === outgoingId);
+      if (!incoming || !outgoing || !occupiesTodaySlot(outgoing, localDateKey())) return current;
+      const laterOrder = insertionOrder(current, 'later');
+      announce(outgoing.completedAt ? 'Swapped into the cleared slot.' : `Swapped — “${outgoing.title}” moved to Later.`);
+      return {
+        ...current,
+        nowTaskId: current.nowTaskId === outgoing.id ? incoming.id : current.nowTaskId,
+        tasks: current.tasks.map((task) => {
+          if (task.id === incoming.id) {
+            return { ...task, bucket: 'today', order: outgoing.order, completedAt: undefined, clearedAt: undefined };
+          }
+          if (task.id === outgoing.id) {
+            return outgoing.completedAt ? { ...task, clearedAt: Date.now() } : { ...task, bucket: 'later', order: laterOrder };
+          }
+          return task;
+        }),
+      };
+    });
+  }, [announce, commit]);
+
+  const clearDoneToday = useCallback(() => {
+    commit((current) => {
+      const today = localDateKey();
+      const done = current.tasks.filter((task) => task.completedAt && occupiesTodaySlot(task, today));
+      if (!done.length) return current;
+      const doneIds = new Set(done.map((task) => task.id));
+      announce(`Cleared ${plural(done.length, 'slot')}.`);
+      return {
+        ...current,
+        tasks: current.tasks.map((task) => doneIds.has(task.id) ? { ...task, clearedAt: Date.now() } : task),
+      };
+    });
+  }, [announce, commit]);
+
+  /** Persist the given sequence of task ids as their explicit order. */
+  const reorderTasks = useCallback((orderedIds: string[]) => {
+    commit((current) => {
+      const positions = new Map(orderedIds.map((id, index) => [id, index]));
+      if (current.tasks.every((task) => !positions.has(task.id) || task.order === positions.get(task.id))) return current;
+      return {
+        ...current,
+        tasks: current.tasks.map((task) => positions.has(task.id) ? { ...task, order: positions.get(task.id) } : task),
+      };
+    });
+  }, [commit]);
+
+  const setNowTask = useCallback((taskId: string) => {
+    commit((current) => current.nowTaskId === taskId ? current : { ...current, nowTaskId: taskId });
+  }, [commit]);
+
+  const restoreBackup = useCallback((restored: AppState) => {
+    commit(() => restored);
+    announce('Backup restored.');
+  }, [announce, commit]);
+
+  const setDailyNote = useCallback((text: string) => {
+    commit((current) => ({ ...current, dailyNote: { date: localDateKey(), text } }));
   }, [commit]);
 
   const completeRecurringInstance = useCallback((instanceId: string) => {
@@ -216,21 +349,12 @@ export function useFiveState(currentDate: Date) {
     }));
   }, [commit]);
 
-  const clearDaybook = useCallback(() => {
-    commit((current) => ({ ...current, daybookClearedAt: Date.now() }));
-    announce('Today’s daybook is clear. New completions will still appear.');
-  }, [announce, commit]);
-
-  const toggleDaybook = useCallback(() => {
-    commit((current) => ({ ...current, daybookMinimized: !current.daybookMinimized }));
-  }, [commit]);
-
-  const addRecurringTask = useCallback((title: string, cadence: RecurrenceCadence, categoryId?: string, weekday?: number) => {
+  const addRecurringTask = useCallback((title: string, cadence: RecurrenceCadence, weekday?: number) => {
     const cleanTitle = title.trim();
     if (!cleanTitle) return;
     commit((current) => {
       if (current.recurringTasks.length >= RECURRING_LIMIT) {
-        announce('Recurring is full — five routines is the limit.');
+        announce('Five routines is the limit.');
         return current;
       }
       const next = {
@@ -239,7 +363,6 @@ export function useFiveState(currentDate: Date) {
           id: crypto.randomUUID(),
           title: cleanTitle,
           cadence,
-          categoryId,
           weekday,
           enabled: true,
           createdAt: Date.now(),
@@ -264,17 +387,22 @@ export function useFiveState(currentDate: Date) {
     }));
   }, [commit]);
 
-  const addCategory = useCallback((name: string, color: string) => {
-    const cleanName = name.trim();
+  const addCategory = useCallback((name: string) => {
+    const cleanName = name.trim().replace(/^#/, '');
     if (!cleanName) return;
     commit((current) => {
       if (current.categories.length >= CATEGORY_LIMIT) {
-        announce('Five categories is enough structure for now.');
+        announce('Five categories is the limit.');
         return current;
       }
+      if (current.categories.some((category) => category.name.toLowerCase() === cleanName.toLowerCase())) return current;
       return {
         ...current,
-        categories: [...current.categories, { id: crypto.randomUUID(), name: cleanName, color }],
+        categories: [...current.categories, {
+          id: crypto.randomUUID(),
+          name: cleanName,
+          color: CATEGORY_COLORS[current.categories.length % CATEGORY_COLORS.length],
+        }],
       };
     });
   }, [announce, commit]);
@@ -289,21 +417,35 @@ export function useFiveState(currentDate: Date) {
     }));
   }, [commit]);
 
-  const addBlockedSite = useCallback((site: string): boolean => {
+  /** Call from the submit handler itself so Chrome sees the user gesture behind the access request. */
+  const addBlockedSite = useCallback((site: string): Promise<boolean> => {
     const normalized = normalizeBlockedDomain(site);
     if (!normalized) {
       announce('Enter a valid website, such as reddit.com.');
-      return false;
+      return Promise.resolve(false);
     }
-    commit((current) => current.blocklist.includes(normalized)
-      ? current
-      : { ...current, blocklist: [...current.blocklist, normalized] });
-    return true;
+    return requestSiteAccess([normalized]).then((granted) => {
+      if (!granted) {
+        announce(`Five can only block ${normalized} with your OK, so it was not added.`);
+        return false;
+      }
+      commit((current) => current.blocklist.includes(normalized)
+        ? current
+        : { ...current, blocklist: [...current.blocklist, normalized] });
+      return true;
+    });
   }, [announce, commit]);
 
   const removeBlockedSite = useCallback((site: string) => {
     commit((current) => ({ ...current, blocklist: current.blocklist.filter((entry) => entry !== site) }));
+    releaseSiteAccess(site);
   }, [commit]);
+
+  const allowBlockedSites = useCallback((sites: string[]) => {
+    void requestSiteAccess(sites).then((granted) => {
+      if (!granted) announce('Those sites stay unblocked until you allow them.');
+    });
+  }, [announce]);
 
   const pauseBlocking = useCallback(() => {
     commit((current) => {
@@ -356,8 +498,8 @@ export function useFiveState(currentDate: Date) {
     });
   }, [announce, commit]);
 
-  const toggleTheme = useCallback(() => {
-    commit((current) => ({ ...current, theme: current.theme === 'light' ? 'dark' : 'light' }));
+  const setTheme = useCallback((theme: ThemeMode) => {
+    commit((current) => current.theme === theme ? current : { ...current, theme });
   }, [commit]);
 
   const togglePrivacyMode = useCallback(() => {
@@ -366,6 +508,14 @@ export function useFiveState(currentDate: Date) {
 
   const setPrivacyWallpaper = useCallback((privacyWallpaper: PrivacyWallpaperId) => {
     commit((current) => ({ ...current, privacyWallpaper }));
+  }, [commit]);
+
+  const startPomodoro = useCallback(() => {
+    commit((current) => {
+      const timer = current.pomodoro;
+      if (timer.endsAt) return current;
+      return { ...current, pomodoro: { ...timer, endsAt: Date.now() + timer.pausedSeconds * 1000 } };
+    });
   }, [commit]);
 
   const startPausePomodoro = useCallback(() => {
@@ -432,18 +582,23 @@ export function useFiveState(currentDate: Date) {
   return {
     state,
     notice,
-    activeTodayCount,
+    announce,
     todaysRecurring,
     addTask,
     completeTask,
     restoreTask,
     deleteTask,
     moveTask,
-    reorderTask,
+    freeTodaySlot,
+    swapIntoToday,
+    clearDoneToday,
+    reorderTasks,
+    editTask,
+    setNowTask,
+    setDailyNote,
+    restoreBackup,
     completeRecurringInstance,
     restoreRecurringInstance,
-    clearDaybook,
-    toggleDaybook,
     addRecurringTask,
     toggleRecurringTask,
     deleteRecurringTask,
@@ -451,11 +606,13 @@ export function useFiveState(currentDate: Date) {
     deleteCategory,
     addBlockedSite,
     removeBlockedSite,
+    allowBlockedSites,
     pauseBlocking,
     resumeBlocking,
-    toggleTheme,
+    setTheme,
     togglePrivacyMode,
     setPrivacyWallpaper,
+    startPomodoro,
     startPausePomodoro,
     resetPomodoro,
     setFocusMinutes,
@@ -463,3 +620,5 @@ export function useFiveState(currentDate: Date) {
     completePomodoro,
   };
 }
+
+export type FiveStore = ReturnType<typeof useFiveState>;

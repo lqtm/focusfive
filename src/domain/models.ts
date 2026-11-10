@@ -10,8 +10,12 @@ export const PRIVACY_WALLPAPER_IDS = [
   'open-country',
 ] as const;
 
-export type TabId = 'today' | 'later' | 'ideas' | 'recurring';
-export type ThemeMode = 'light' | 'dark';
+export type TabId = 'today' | 'later' | 'ideas';
+export type ViewId = TabId | 'routines' | 'settings';
+export const THEME_IDS = ['system', 'light', 'dark', 'paper', 'dots', 'blueprint', 'dusk', 'brutal', 'acid'] as const;
+export type ThemeMode = typeof THEME_IDS[number];
+/** Synchronous copy of the theme so a new tab paints in the right theme before chrome.storage resolves. */
+export const THEME_CACHE_KEY = 'five-theme';
 export type PrivacyWallpaperId = typeof PRIVACY_WALLPAPER_IDS[number];
 export type TaskBucket = 'today' | 'later' | 'ideas';
 export type RecurrenceCadence = 'daily' | 'weekdays' | 'weekly';
@@ -33,6 +37,10 @@ export interface Task {
   createdAt: number;
   order?: number;
   completedAt?: number;
+  /** A completed Today task keeps its slot until this is set (or the day ends). */
+  clearedAt?: number;
+  /** Optional one-line note that decodes a compressed title. */
+  hint?: string;
 }
 
 export interface RecurringTask {
@@ -64,18 +72,23 @@ export interface PomodoroState {
   completedSessionUnits: number;
 }
 
+export interface DailyNote {
+  date: string;
+  text: string;
+}
+
 export interface AppState {
-  schemaVersion: 3;
+  schemaVersion: 4;
   tasks: Task[];
   recurringTasks: RecurringTask[];
   recurringInstances: RecurringInstance[];
   categories: Category[];
+  nowTaskId: string | null;
+  dailyNote: DailyNote;
   blocklist: string[];
   blockingPausedUntil: number | null;
   blockingPauseDate: string;
   blockingPausesUsed: number;
-  daybookClearedAt: number | null;
-  daybookMinimized: boolean;
   theme: ThemeMode;
   privacyMode: boolean;
   privacyWallpaper: PrivacyWallpaperId;

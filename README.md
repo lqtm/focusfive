@@ -4,18 +4,22 @@ Five is a Chrome Manifest V3 new-tab extension inspired by the calm, text-first 
 
 ## Features
 
-- Five-slot Today list with automatic Later overflow
-- Separate Later backlog and intentional promotion to Today
-- Unlimited Ideas inbox for brain-dump capture before triaging thoughts to Today or Later
-- Up to five daily, weekday, or weekly routines
-- Due routines shown in Today without consuming manual slots
-- Desktop Daybook rail with completed work, daily done/open summary, restore, and a non-destructive manual page reset
-- Up to five color-coded categories
-- Local distraction blocklist using Manifest V3 dynamic rules
+- Five-slot Today list with one task marked Now; done tasks hold their slot until cleared
+- Full-screen Focus mode started from the Now row, with 25/50-minute focus blocks, 10/20-minute rests, and daily session counts
+- Later backlog with a swap picker when Today is full
+- Unlimited Ideas inbox with a one-at-a-time Triage card
+- `#tag` parsing into up to five categories
+- Up to five daily, weekday, or weekly routines on their own page; due routines appear in the Today sidebar without using a slot
+- Daybook sidebar with the day's crossed-off work and a daily note
+- Optional one-line hints under compressed task titles (`title // hint`)
+- Inline editing of task titles and hints (pencil, double-click, or E / H)
+- Drag-to-reorder Today and Later (or move rows with the keyboard)
+- Keyboard shortcuts: N, ↑/↓ (J/K) to pick Now, Shift+↑/↓ to move it, Enter to start, 1–5, L (to Later), I (back to Ideas), Space, Esc, and G T / G L / G I
+- Local distraction blocklist using Manifest V3 dynamic rules, with Chrome access requested one site at a time
+- Backup export and restore (JSON file) in Settings
 - Three daily 30-minute blocklist pauses, with early resume and a five-minute undo window
-- Persistent 25/50-minute focus timer with 10/20-minute rests and daily 25-minute session units
 - One-click Presentation mode that unmounts private content and shows one of six locally bundled wallpapers
-- Light and dark themes
+- Nine themes: System, Light, Dark, Paper, Dot grid, Blueprint, Dusk, and two brutalist themes (Brutal, Acid)
 
 ## Architecture
 
@@ -35,7 +39,9 @@ No remote account or server is required; task data stays in the browser profile.
 
 Five has no account, analytics, telemetry, ads, or remote application service. The extension stores its state in `chrome.storage.local`; bundled fonts and presentation wallpapers work offline.
 
-Chrome's all-sites host permission is used only to enforce declarative blocking rules for domains the user adds to the blocklist. Five does not inspect page contents or transmit browsing activity. See the full [privacy policy](PRIVACY.md).
+Five requests no website access at install. When you add a site to the blocklist, Chrome asks for access to that one site so the blocking rule can redirect it; sites you haven't allowed show an Allow button in Settings. Five does not inspect page contents or transmit browsing activity. See the full [privacy policy](PRIVACY.md).
+
+Store listing copy, privacy-practice answers, and images for the Chrome Web Store live in [`store/`](store/LISTING.md).
 
 ## Load in Chrome or Brave
 

@@ -1,7 +1,7 @@
 import type { AppState, RecurringInstance, RecurringTask } from './models';
 import { localDateKey } from './date';
 
-const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+export const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const INSTANCE_RETENTION_DAYS = 31;
 
 export function isDueToday(task: RecurringTask, date = new Date()): boolean {
@@ -53,7 +53,7 @@ export function getActiveRecurringInstances(state: AppState, date = new Date()):
 }
 
 export function cadenceLabel(task: RecurringTask): string {
-  if (task.cadence === 'daily') return 'Every day';
+  if (task.cadence === 'daily') return 'Daily';
   if (task.cadence === 'weekdays') return 'Weekdays';
-  return `Every ${WEEKDAYS[task.weekday ?? 1]}`;
+  return `Weekly · ${WEEKDAY_SHORT[task.weekday ?? 1]}`;
 }

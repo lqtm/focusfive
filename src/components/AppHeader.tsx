@@ -1,61 +1,66 @@
-import { EyeSlash, Moon, Sun } from '@phosphor-icons/react';
+import { ArrowLeft, EyeSlash, GearSix } from '@phosphor-icons/react';
 
-import type { TabId, ThemeMode } from '../domain/models';
+import { formatHeaderDate, localDateKey } from '../domain/date';
+import type { TabId } from '../domain/models';
 
 interface AppHeaderProps {
-  activeTab: TabId;
-  theme: ThemeMode;
-  counts: Record<TabId, number>;
+  activeTab: TabId | null;
+  date: Date;
+  counts: Record<TabId, string>;
   onTabChange: (tab: TabId) => void;
-  onToggleTheme: () => void;
-  onTogglePrivacyMode: () => void;
+  onHideList: () => void;
+  onOpenSettings: () => void;
 }
 
 const tabs: Array<{ id: TabId; label: string }> = [
   { id: 'today', label: 'Today' },
   { id: 'later', label: 'Later' },
   { id: 'ideas', label: 'Ideas' },
-  { id: 'recurring', label: 'Recurring' },
 ];
 
-export function AppHeader({ activeTab, theme, counts, onTabChange, onToggleTheme, onTogglePrivacyMode }: AppHeaderProps) {
+export function AppHeader({ activeTab, date, counts, onTabChange, onHideList, onOpenSettings }: AppHeaderProps) {
   return (
     <header className="app-header">
-      <div className="brand-row">
-        <div className="brand" aria-label="Five">
-          <span className="brand-mark">V</span>
-          <span>FIVE</span>
-          <small>A CALMER FOCUS LIST</small>
-        </div>
-        <div className="header-actions">
-          <button
-            className="icon-button privacy-button"
-            onClick={onTogglePrivacyMode}
-            aria-label="Hide my list for presenting"
-            data-tooltip="Presentation mode"
-          >
-            <EyeSlash size={18} weight="regular" />
-          </button>
-          <button className="icon-button theme-button" onClick={onToggleTheme} aria-label={`Use ${theme === 'light' ? 'dark' : 'light'} theme`} data-tooltip={`Use ${theme === 'light' ? 'dark' : 'light'} theme`}>
-            {theme === 'light' ? <Moon size={18} weight="regular" /> : <Sun size={19} weight="regular" />}
-          </button>
-        </div>
+      <div className="brand">
+        <span className="wordmark">five</span>
+        <time className="mono" dateTime={localDateKey(date)}>{formatHeaderDate(date)}</time>
       </div>
 
-      <nav className="tab-bar" aria-label="Task views">
+      <nav className="segmented-nav" aria-label="Lists">
         {tabs.map((tab) => (
           <button
-            className={activeTab === tab.id ? 'tab active' : 'tab'}
             key={tab.id}
+            type="button"
+            className={activeTab === tab.id ? 'nav-item active' : 'nav-item'}
             onClick={() => onTabChange(tab.id)}
             aria-current={activeTab === tab.id ? 'page' : undefined}
           >
             <span>{tab.label}</span>
-            <span className="tab-count">{String(counts[tab.id]).padStart(2, '0')}</span>
+            <span className="mono nav-count">{counts[tab.id]}</span>
           </button>
         ))}
-        <span className="tab-rule" />
       </nav>
+
+      <div className="header-actions">
+        <button type="button" className="icon-button" onClick={onHideList} aria-label="Hide list" title="Hide list">
+          <EyeSlash size={19} />
+        </button>
+        <button type="button" className="icon-button" onClick={onOpenSettings} aria-label="Settings" title="Settings">
+          <GearSix size={19} />
+        </button>
+      </div>
+    </header>
+  );
+}
+
+export function SubpageHeader({ onBack }: { onBack: () => void }) {
+  return (
+    <header className="app-header subpage-header">
+      <button type="button" className="back-link" onClick={onBack}>
+        <ArrowLeft size={16} aria-hidden="true" />
+        Back to Today
+      </button>
+      <span className="wordmark">five</span>
     </header>
   );
 }
