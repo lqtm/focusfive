@@ -2,10 +2,10 @@ import { defineManifest } from '@crxjs/vite-plugin';
 
 export default defineManifest({
   manifest_version: 3,
-  name: 'Focus Five - a to-do list that stops at five',
+  name: 'Focus Five: New Tab To-Do List',
   short_name: 'Focus Five',
-  description: 'Replaces your new tab with today’s five tasks and a focus timer. Anything else waits in Later or Ideas.',
-  version: '1.7.0',
+  description: 'Shows today’s five tasks on every new tab, with a focus timer and optional site blocking. Everything else waits in Later.',
+  version: '1.7.1',
   icons: {
     16: 'icons/icon-16.png',
     32: 'icons/icon-32.png',

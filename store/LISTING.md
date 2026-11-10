@@ -1,13 +1,13 @@
 # Chrome Web Store submission: Focus Five
 
-Everything the Developer Dashboard asks for, in the order it asks. Upload `release/five-extension-v1.7.0.zip` as the package.
+Everything the Developer Dashboard asks for, in the order it asks. Upload `release/five-extension-v1.7.1.zip` as the package.
 
 ## Store listing tab
 
-**Name** (comes from the manifest): Focus Five - a to-do list that stops at five
+**Name** (comes from the manifest): Focus Five: New Tab To-Do List
 
-**Summary** (from the manifest, 103 of 132 characters):
-Replaces your new tab with today’s five tasks and a focus timer. Anything else waits in Later or Ideas.
+**Summary** (from the manifest, 121 of 132 characters):
+Shows today’s five tasks on every new tab, with a focus timer and optional site blocking. Everything else waits in Later.
 
 **Category:** Productivity → Workflow & Planning
 
